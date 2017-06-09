@@ -1,0 +1,14 @@
+It contains a sample code for invoking the ALS implementation of recommendation in Spark ML.
+
+1. To run use the following command:
+> spark-submit --driver-memory 2g --master local[4] --class "com.test.reco.als.ALSRecoGenerator" target/recommender_system-0.0.1-SNAPSHOT-jar-with-dependencies.jar src/main/resources/ml-100k/u.data >target/out.txt 2>target/err.txt &
+
+2. Make sure to configure the local[4] with the number of cores in the machine running.
+3. Update this: src/main/resources/ml-100k/u.data with the location where the file is available.
+4. Once the run is finished lookout for target/out.txt for the results.
+
+MovieLens data can be obtained from the following link,
+http://files.grouplens.org/datasets/movielens/ml-100k.zip
+
+
+Will soon provide sample implementations of User-user similarity and Item-item similarity code for generating recommendation.
