@@ -1,0 +1,5 @@
+1. ARM Compute test:
+spark-submit --master local[4] --class "org.reco.sys.arm.ARMCompute"  target/arm-0.0.1-SNAPSHOT-jar-with-dependencies.jar transactions.csv output flatten:true applyontest:true >target/out.txt 2>target/err.txt &
+2. ARM Compute on retail trans dataset:
+spark-submit --master local[4] --class "org.reco.sys.arm.ARMCompute"  target/arm-0.0.1-SNAPSHOT-jar-with-dependencies.jar retail-transactions output flatten:false applyontest:false >target/out.txt 2>target/err.txt &
+
