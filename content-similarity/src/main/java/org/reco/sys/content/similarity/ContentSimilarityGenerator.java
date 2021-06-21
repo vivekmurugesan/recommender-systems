@@ -39,11 +39,11 @@ public class ContentSimilarityGenerator {
 	}
 	
 	public void generateSimilarities(JavaSparkContext sc) {
-		
+
 		JavaPairRDD<Integer, Movie> moviesRdd = processMovieData(sc);
 
 		this.createAllGenreList(sc, moviesRdd);
-		
+
 		JavaPairRDD<Tuple2<Integer, Movie>, Tuple2<Integer, Movie>> cartProd 
 		= moviesRdd.cartesian(moviesRdd);
 		System.out.println("Number of cart prods:" + 
@@ -54,8 +54,29 @@ public class ContentSimilarityGenerator {
 		 * sim = m11 / (m10 + m11 + m01)
 		 */
 		JavaPairRDD<Tuple2<Integer, Integer>, Double> jaccardSimRdd = 
-				cartProd.mapToPair(x -> {
+				computeJaccardSimilarities(cartProd);
 
+		
+		// Computing euclidean similarity
+		JavaPairRDD<Tuple2<Integer, Integer>, Double> euclideanSimRdd = 
+				computeEuclideanSimilarities(cartProd);
+		
+		JavaPairRDD<Tuple2<Integer, Integer>, Tuple2<Double, Double>> joined = 
+				jaccardSimRdd.join(euclideanSimRdd);
+
+		System.out.println("Number of non-zero sim scores generated:" + 
+				jaccardSimRdd.count());
+
+		joined.map(x -> x._1._1 +", " + x._1._2 + ", " + x._2._1 + ", " + x._2._2 )
+		.saveAsTextFile(outputDir+"/Similarities");
+	}
+	
+	public JavaPairRDD<Tuple2<Integer, Integer>, Double>
+	computeEuclideanSimilarities(JavaPairRDD<Tuple2<Integer, Movie>, Tuple2<Integer, Movie>> 
+	cartProd){
+
+		JavaPairRDD<Tuple2<Integer, Integer>, Double> euclideanSimRdd = 
+				cartProd.mapToPair(x -> {
 					int movie1Id = x._1._1;
 					Movie movie1 = x._1._2;
 
@@ -81,20 +102,57 @@ public class ContentSimilarityGenerator {
 
 					m10 = genreMap.size() - (m11 + m01);
 
-					double jaccardSim = (m11 * 1.0) / (m10 + m11 + m01);
+					double dist = Math.sqrt((m10 + m01) * 1.0);
 
-					return new Tuple2<>(new Tuple2<>(movie1Id, movie2Id), jaccardSim);
+					double sim = 1.0 / (1.0 + dist);
 
+					return new Tuple2<>(new Tuple2<>(movie1Id, movie2Id), sim);
 				});
 		
-		JavaPairRDD<Tuple2<Integer, Integer>, Double> jaccardSimFilteredRdd = 
-				jaccardSimRdd.filter(x -> x._2 > 0.0);
+		return euclideanSimRdd;
+	}
+	
+	public JavaPairRDD<Tuple2<Integer, Integer>, Double>
+		computeJaccardSimilarities(JavaPairRDD<Tuple2<Integer, Movie>, Tuple2<Integer, Movie>> 
+		cartProd) {
+		JavaPairRDD<Tuple2<Integer, Integer>, Double> jaccardSimRdd = 
+				cartProd.mapToPair(x -> {
+
+			int movie1Id = x._1._1;
+			Movie movie1 = x._1._2;
+
+			int movie2Id = x._2._1;
+			Movie movie2 = x._2._2;
+
+			Map<String, Integer> genreMap = new HashMap<>();
+			int m11 = 0;
+			int m10 = 0;
+			int m01 = 0;
+
+			List<String> m1Genres = movie1.getGenres();
+			for(String g : m1Genres)
+				genreMap.put(g, 1);
+
+			List<String> m2Genres = movie2.getGenres();
+			for(String g : m2Genres) {
+				if(m1Genres.contains(g))
+					m11++;
+				else
+					m01++;
+			}
+
+			m10 = genreMap.size() - (m11 + m01);
+
+			double jaccardSim = (m11 * 1.0) / (m10 + m11 + m01);
+
+			return new Tuple2<>(new Tuple2<>(movie1Id, movie2Id), jaccardSim);
+
+		});
 		
-		System.out.println("Number of non-zero sim scores generated:" + 
-				jaccardSimFilteredRdd.count());
+		/* JavaPairRDD<Tuple2<Integer, Integer>, Double> jaccardSimFilteredRdd = 
+				jaccardSimRdd.filter(x -> x._2 > 0.0); */
 		
-		jaccardSimFilteredRdd.map(x -> x._1._1 +", " + x._1._2 + ", " + x._2)
-			.saveAsTextFile(outputDir+"/Similarities");
+		return jaccardSimRdd;
 	}
 	
 	public JavaPairRDD<Integer, Movie> processMovieData(JavaSparkContext sc) {
