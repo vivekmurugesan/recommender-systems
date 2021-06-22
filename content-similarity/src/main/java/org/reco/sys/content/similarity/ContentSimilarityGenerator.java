@@ -2,8 +2,10 @@ package org.reco.sys.content.similarity;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -11,6 +13,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import scala.Tuple2;
+import scala.Tuple3;
 
 public class ContentSimilarityGenerator {
 	
@@ -59,16 +62,59 @@ public class ContentSimilarityGenerator {
 		
 		// Computing euclidean similarity
 		JavaPairRDD<Tuple2<Integer, Integer>, Double> euclideanSimRdd = 
-				computeEuclideanSimilarities(cartProd);
+				computeEuclideanSimilarities(cartProd).cache();
+		
+		// Computing cosine similarity
+		JavaPairRDD<Tuple2<Integer, Integer>, Double> cosineSimRdd = 
+				computeEuclideanSimilarities(cartProd).cache();
 		
 		JavaPairRDD<Tuple2<Integer, Integer>, Tuple2<Double, Double>> joined = 
-				jaccardSimRdd.join(euclideanSimRdd);
+				jaccardSimRdd.join(euclideanSimRdd).cache();
+		
+		JavaPairRDD<Tuple2<Integer, Integer>, Tuple3<Double, Double, Double>> jacEucCosineRdd =
+			joined.join(cosineSimRdd).mapToPair(x ->
+				new Tuple2<>(x._1, new Tuple3<>(x._2._1._1, x._2._1._1, x._2._2)));
 
 		System.out.println("Number of non-zero sim scores generated:" + 
-				jaccardSimRdd.count());
+				jacEucCosineRdd.count());
 
-		joined.map(x -> x._1._1 +", " + x._1._2 + ", " + x._2._1 + ", " + x._2._2 )
+		jacEucCosineRdd.map(x -> x._1._1 +", " + x._1._2 + ", " + x._2._1() + ", " + x._2._2() + ", " + x._2._3() )
 		.saveAsTextFile(outputDir+"/Similarities");
+	}
+	
+	public JavaPairRDD<Tuple2<Integer, Integer>, Double>
+	computeCosineSimilarities(JavaPairRDD<Tuple2<Integer, Movie>, Tuple2<Integer, Movie>> 
+	cartProd, JavaSparkContext sc){
+		
+		JavaPairRDD<Tuple2<Integer, Integer>, Double> cosineSimRdd =
+			cartProd.mapToPair(x -> {
+				int movie1Id = x._1._1;
+				Movie movie1 = x._1._2;
+
+				int movie2Id = x._2._1;
+				Movie movie2 = x._2._2;
+
+				Map<String, Integer> genreMap = new HashMap<>();
+				int m11 = 0;
+				
+				List<String> m1Genres = movie1.getGenres();
+				for(String g : m1Genres)
+					genreMap.put(g, 1);
+
+				List<String> m2Genres = movie2.getGenres();
+				for(String g : m2Genres) {
+					if(m1Genres.contains(g))
+						m11++;
+				}
+				
+				double sim = m11 * 1.0 / 
+						(Math.sqrt(movie1.getGenres().size()) * Math.sqrt(movie2.getGenres().size()));
+				
+				return new Tuple2<>(new Tuple2<>(movie1Id, movie2Id), sim);
+						
+			});
+		
+		return cosineSimRdd;
 	}
 	
 	public JavaPairRDD<Tuple2<Integer, Integer>, Double>
@@ -76,39 +122,39 @@ public class ContentSimilarityGenerator {
 	cartProd){
 
 		JavaPairRDD<Tuple2<Integer, Integer>, Double> euclideanSimRdd = 
-				cartProd.mapToPair(x -> {
-					int movie1Id = x._1._1;
-					Movie movie1 = x._1._2;
+			cartProd.mapToPair(x -> {
+				int movie1Id = x._1._1;
+				Movie movie1 = x._1._2;
 
-					int movie2Id = x._2._1;
-					Movie movie2 = x._2._2;
+				int movie2Id = x._2._1;
+				Movie movie2 = x._2._2;
 
-					Map<String, Integer> genreMap = new HashMap<>();
-					int m11 = 0;
-					int m10 = 0;
-					int m01 = 0;
+				Map<String, Integer> genreMap = new HashMap<>();
+				int m11 = 0;
+				int m10 = 0;
+				int m01 = 0;
 
-					List<String> m1Genres = movie1.getGenres();
-					for(String g : m1Genres)
-						genreMap.put(g, 1);
+				List<String> m1Genres = movie1.getGenres();
+				for(String g : m1Genres)
+					genreMap.put(g, 1);
 
-					List<String> m2Genres = movie2.getGenres();
-					for(String g : m2Genres) {
-						if(m1Genres.contains(g))
-							m11++;
-						else
-							m01++;
-					}
+				List<String> m2Genres = movie2.getGenres();
+				for(String g : m2Genres) {
+					if(m1Genres.contains(g))
+						m11++;
+					else
+						m01++;
+				}
 
-					m10 = genreMap.size() - (m11 + m01);
+				m10 = genreMap.size() - (m11 + m01);
 
-					double dist = Math.sqrt((m10 + m01) * 1.0);
+				double dist = Math.sqrt((m10 + m01) * 1.0);
 
-					double sim = 1.0 / (1.0 + dist);
+				double sim = 1.0 / (1.0 + dist);
 
-					return new Tuple2<>(new Tuple2<>(movie1Id, movie2Id), sim);
-				});
-		
+				return new Tuple2<>(new Tuple2<>(movie1Id, movie2Id), sim);
+			});
+
 		return euclideanSimRdd;
 	}
 	
