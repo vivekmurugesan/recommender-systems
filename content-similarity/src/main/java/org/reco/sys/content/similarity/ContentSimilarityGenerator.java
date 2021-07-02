@@ -15,6 +15,21 @@ import org.apache.spark.api.java.JavaSparkContext;
 import scala.Tuple2;
 import scala.Tuple3;
 
+/**
+ * Generates content similarity scores between movies based on the genres 
+ * with the following mechanisms,
+ * 1. Cosine Similarity
+ * 2. Jaccard Similarity
+ * 3. Euclidean distance based
+ * 
+ * Get the dataset from this location:
+ * https://grouplens.org/datasets/movielens/10m/
+ * 
+ * and pass in movies.dat file as the input for this code.
+ * 
+ * @author Vivek Murugesan
+ *
+ */
 public class ContentSimilarityGenerator {
 	
 	private String outputDir;

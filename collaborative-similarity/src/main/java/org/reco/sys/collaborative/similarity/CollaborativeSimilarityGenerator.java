@@ -15,6 +15,21 @@ import org.apache.spark.api.java.JavaSparkContext;
 import scala.Tuple2;
 import scala.Tuple3;
 
+/**
+ * Generates collaborative similarity scores between movies based on the rating
+ * co-occurrences with the following mechanisms,
+ * 1. Cosine Similarity
+ * 2. Jaccard Similarity
+ * 3. Euclidean distance based
+ * 
+ * Get the dataset from this location:
+ * https://grouplens.org/datasets/movielens/10m/
+ * 
+ * and pass in ratings.dat file as the input for this code.
+ * 
+ * @author Vivek Murugesan
+ *
+ */
 public class CollaborativeSimilarityGenerator {
 	
 	private String outputDir;
@@ -217,7 +232,8 @@ public class CollaborativeSimilarityGenerator {
 		return jaccardSimRdd;
 	}
 	
-	public JavaPairRDD<Integer, Integer> processRatingsData(JavaSparkContext sc) {
+	public JavaPairRDD<Integer, Integer> processRatingsData(
+			JavaSparkContext sc) {
 		// Loading Movies data --> movie_id::title::tag1|tag2...
 		// Ratings data in the form --> UserID::MovieID::Rating::Timestamp
 
@@ -235,21 +251,7 @@ public class CollaborativeSimilarityGenerator {
 		
 		return ratingsRdd;
 
-	}
+	}	
 	
-	private void createAllGenreList(JavaSparkContext sc, 
-			JavaPairRDD<Integer, Movie> moviesRdd) {
-		this.allGenreList.addAll(moviesRdd.flatMapToPair(x -> {
-			int movieId = x._1;
-			List<String> genres = x._2.getGenres();
-			List<Tuple2<Integer, String>> tuples = new ArrayList<>();
-			for(String g : genres) {
-				tuples.add(new Tuple2<>(movieId, g.trim()));
-			}
-
-			return tuples.iterator();
-		}).map(x -> x._2).filter(x -> !x.contains(Movie.EXCLUDE))
-				.distinct().collect());
-	}
 
 }
